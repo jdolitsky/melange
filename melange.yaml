@@ -8,6 +8,9 @@ package:
     - license: Apache-2.0
       paths:
         - "*"
+  dependencies:
+    runtime:
+      - busybox
 
 environment:
   contents:
@@ -22,4 +25,5 @@ pipeline:
   - name: Build application
     runs: |
       mkdir -p "${{targets.destdir}}"
-      echo "ello" > "${{targets.destdir}}/boop"
+      echo "#!/bin/sh" > "${{targets.destdir}}/boop"
+      echo "echo hello" >> "${{targets.destdir}}/boop"

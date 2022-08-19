@@ -32,6 +32,27 @@ melange build melange.yaml --arch aarch64,amd64
 melange index
 ```
 
+in another terminal:
+
+```
+docker run --rm -v "${PWD}":/work \
+    --entrypoint sh \
+    distroless.dev/melange -c \
+        'cd packages && for d in `find . -type d -mindepth 1`; do \
+            ( \
+                cd $d && \
+                melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz\
+            ) \
+        done'
+```
+
+```
+docker run --rm -v "${PWD}":/work \
+    distroless.dev/apko build --debug apko.yaml \
+    "${REF}" output.tar -k melange.rsa.pub \
+    --build-arch amd64,aarch64,armv7
+```
+
 ## Old
 
 Build apk packages using declarative pipelines.
