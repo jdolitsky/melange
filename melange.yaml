@@ -1,0 +1,25 @@
+package:
+  name: hello-server
+  version: 0.1.0
+  description: friendly little webserver
+  target-architecture:
+    - all
+  copyright:
+    - license: Apache-2.0
+      paths:
+        - "*"
+
+environment:
+  contents:
+    repositories:
+      - https://dl-cdn.alpinelinux.org/alpine/edge/main
+      - https://dl-cdn.alpinelinux.org/alpine/edge/community
+    packages:
+      - alpine-baselayout-data
+      - busybox
+
+pipeline:
+  - name: Build application
+    runs: |
+      mkdir -p "${{targets.destdir}}"
+      echo "ello" > "${{targets.destdir}}/boop"

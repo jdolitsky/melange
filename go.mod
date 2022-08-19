@@ -9,10 +9,14 @@ require (
 	github.com/spf13/cobra v1.5.0
 	github.com/stretchr/testify v1.8.0
 	github.com/zealic/xignore v0.3.3
+	gitlab.alpinelinux.org/alpine/go v0.5.0
 	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29
+	gopkg.in/ini.v1 v1.66.2
 	gopkg.in/yaml.v3 v3.0.1
 	sigs.k8s.io/release-utils v0.7.2
 )
+
+replace gitlab.alpinelinux.org/alpine/go => gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220817010642-810c9dd9faed
 
 require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect
@@ -53,7 +57,6 @@ require (
 	github.com/spf13/afero v1.8.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/vbatts/tar-split v0.11.2 // indirect
-	gitlab.alpinelinux.org/alpine/go v0.5.0 // indirect
 	go.lsp.dev/uri v0.3.0 // indirect
 	go.mongodb.org/mongo-driver v1.8.3 // indirect
 	golang.org/x/build v0.0.0-20220326001204-1a930a73d482 // indirect

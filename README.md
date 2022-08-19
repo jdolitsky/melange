@@ -1,5 +1,39 @@
 # melange
 
+
+## Remove me
+
+```
+docker run --rm -w "${PWD}" -v "${PWD}:${PWD}" -ti --privileged --entrypoint sh \
+  distroless.dev/melange:latest -c \
+    'apk add make --force-broken-world && \
+      apk add go --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community --force-broken-world && \
+      printf "\nWelcome to the melange development environment!\n\n\n" && \
+      export PS1="[melange] ❯ " && sh -i'
+```
+
+```
+make melange install
+```
+
+```
+melange keygen
+```
+
+```
+rm -rf packages
+```
+
+```
+melange build melange.yaml --arch aarch64,amd64
+```
+
+```
+melange index
+```
+
+## Old
+
 Build apk packages using declarative pipelines.
 
 Commonly used to provide custom packages for container images built with [apko][apko].
