@@ -19,7 +19,6 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha1"
-	b64 "encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,7 +26,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	// nolint:gosec
 
@@ -96,8 +94,8 @@ func IndexCmd(ctx context.Context, outDir string) error {
 		}
 
 		index := &apkrepo.ApkIndex{
-			Signature:   nil,
-			Description: "hello nice to meet u",
+			//Signature:   nil,
+			//Description: "hello nice to meet u",
 			Packages:    packages,
 		}
 
@@ -118,6 +116,13 @@ func IndexCmd(ctx context.Context, outDir string) error {
 // From https://github.com/chainguard-dev/apk-repo-generator/blob/5666d7fbe6ac891527d8995f13863b7ec4127def/main.go#L509
 func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 	file, err := os.Open(apkFilePath)
+	if err != nil {
+		return nil, err
+	}
+	fileInfo, err := os.Lstat(apkFilePath)
+	if err != nil {
+		return nil, err
+	}
 	gzRead, err := gzip.NewReader(file)
 	if err != nil {
 		return nil, err
@@ -139,16 +144,6 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 			if err != nil {
 				return nil, fmt.Errorf("Fail to read file: %w", err)
 			}
-			/*
-			section, err := cfg.GetSection(ini.DefaultSection)
-			if err != nil {
-				log.Printf("failed to get default section: %v", err)
-				return nil, err
-			}
-			for k, v := range section.KeysHash() {
-				fmt.Println(k + ": " + v)
-			}
-			*/
 			apkInfo := new(APKInfo)
 			err = cfg.MapTo(apkInfo)
 			if err != nil {
@@ -162,9 +157,12 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 				return nil, err
 			}
 			hasher.Write(data)
-			apkInfo.ID = fmt.Sprintf("Q1%s", b64.StdEncoding.EncodeToString(hasher.Sum(nil)))
-			//log.Println(">>>", apkInfo.ID)
 
+			idRaw := hasher.Sum(nil)
+			//apkInfo.ID = fmt.Sprintf("Q1%s", b64.StdEncoding.Encode(hasher.Sum(nil)))
+			log.Println(">>>", string(idRaw))
+
+			/*
 			var buildTime time.Time
 			if apkInfo.BuildDate != "" {
 				buildTime, err = time.Parse("2022/08/19 22:42:41", apkInfo.BuildDate)
@@ -172,6 +170,9 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 					return nil, err
 				}
 			}
+			*/
+
+			//buildTime := time.Now()
 
 			apkInfoUpstream := &apkrepo.Package{
 				Name:             apkInfo.PKGName,
@@ -182,14 +183,14 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 				Origin:           apkInfo.Origin,
 				Maintainer:       apkInfo.Maintainer,
 				URL:              apkInfo.URL,
-				Checksum:         []byte(apkInfo.ID),
+				Checksum:         idRaw,
 				Dependencies:     apkInfo.Depend,
 				Provides:         apkInfo.Provides,
-				InstallIf:        strings.Split(apkInfo.InstallIf, " "),
-				Size:             uint64(apkInfo.Size),
+				//InstallIf:        strings.Split(apkInfo.InstallIf, " "),
+				Size:             uint64(fileInfo.Size()),
 				InstalledSize:    uint64(apkInfo.Size),
 				//ProviderPriority: 0,
-				BuildTime:        buildTime,
+				//BuildTime:        buildTime,
 				RepoCommit:       apkInfo.Commit,
 				//Replaces:         "",
 			}

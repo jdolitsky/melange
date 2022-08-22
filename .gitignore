@@ -20,3 +20,10 @@ melange
 melange.rsa
 melange.rsa.pub
 packages/
+
+.SIGN.RSA.melange.rsa.pub
+APKINDEX
+output.tar
+sbom-x86_64.cdx
+sbom-x86_64.spdx.json
+vendor/

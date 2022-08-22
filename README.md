@@ -13,6 +13,49 @@ docker run --rm -w "${PWD}" -v "${PWD}:${PWD}" -ti --privileged --entrypoint sh 
 ```
 
 ```
+make melange install && \ 
+  melange keygen && \
+  rm -rf packages && \
+  melange build melange.yaml --arch aarch64,amd64 \
+    --repository-append packages --keyring-append melange.rsa && \
+  melange index && \
+  for d in `find packages -type d -mindepth 1`; do \
+    (cd $d && melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz)
+  done && \
+  tar -xvf packages/aarch64/APKINDEX.tar.gz && cat APKINDEX
+```
+
+```
+melange keygen && \
+  rm -rf packages && \
+  melange build melange.yaml --arch aarch64,amd64 \
+    --repository-append packages --keyring-append melange.rsa && \
+  for d in `find packages -type d -mindepth 1`; do \
+    (cd $d && apk index -o APKINDEX.tar.gz *.apk && melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz)
+  done && \
+  tar -xvf packages/aarch64/APKINDEX.tar.gz && cat APKINDEX
+```
+
+```
+melange index
+```
+
+```
+for d in `find packages -type d -mindepth 1`; do \
+  (cd $d && melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz)
+done
+```
+
+in another terminal:
+```
+docker run --rm -v "${PWD}":/work \
+    distroless.dev/apko build --debug apko.yaml \
+    abc:123 output.tar -k melange.rsa.pub \
+    --build-arch amd64,aarch64
+```
+
+```
+```
 make melange install
 ```
 
@@ -25,32 +68,18 @@ rm -rf packages
 ```
 
 ```
-melange build melange.yaml --arch aarch64,amd64
+melange build melange.yaml --arch aarch64,amd64 \
+  --repository-append packages --keyring-append melange.rsa
 ```
 
 ```
 melange index
 ```
 
-in another terminal:
-
 ```
-docker run --rm -v "${PWD}":/work \
-    --entrypoint sh \
-    distroless.dev/melange -c \
-        'cd packages && for d in `find . -type d -mindepth 1`; do \
-            ( \
-                cd $d && \
-                melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz\
-            ) \
-        done'
-```
-
-```
-docker run --rm -v "${PWD}":/work \
-    distroless.dev/apko build --debug apko.yaml \
-    "${REF}" output.tar -k melange.rsa.pub \
-    --build-arch amd64,aarch64,armv7
+for d in `find packages -type d -mindepth 1`; do \
+  (cd $d && melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz)
+done
 ```
 
 ## Old
