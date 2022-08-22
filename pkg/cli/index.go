@@ -16,6 +16,7 @@ package cli
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha1"
@@ -69,14 +70,12 @@ func IndexCmd(ctx context.Context, outDir string) error {
 			log.Printf("warning: found unknown file in packages directory: %s", archName)
 			continue
 		}
-
 		log.Printf("generating APKINDEX.tar.gz for arch directory %s/", archName)
 		archDir := filepath.Join(outDir, archName)
 		apks, err := os.ReadDir(archDir)
 		if err != nil {
 			return fmt.Errorf("failed to read arch directory %s: %w", archDir, err)
 		}
-
 		packages := []*apkrepo.Package{}
 		for _, apk := range apks {
 			apkName := apk.Name()
@@ -92,17 +91,18 @@ func IndexCmd(ctx context.Context, outDir string) error {
 			}
 			packages = append(packages, pkg)
 		}
-
 		index := &apkrepo.ApkIndex{
-			//Signature:   nil,
-			//Description: "hello nice to meet u",
 			Packages:    packages,
 		}
-
 		archive, err := apkrepo.ArchiveFromIndex(index)
-
+		if err != nil {
+			return err
+		}
 		apkIndexFilename := filepath.Join(outDir, archName, "APKINDEX.tar.gz")
 		outFile, err := os.Create(apkIndexFilename)
+		if err != nil {
+			return err
+		}
 		defer outFile.Close()
 		if _, err = io.Copy(outFile, archive); err != nil {
 			return err
@@ -139,7 +139,6 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 			continue
 		}
 		if cur.Name == ".PKGINFO" {
-			// load the config
 			cfg, err := ini.ShadowLoad(tarRead)
 			if err != nil {
 				return nil, fmt.Errorf("Fail to read file: %w", err)
@@ -149,32 +148,11 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 			if err != nil {
 				return nil, err
 			}
-
-			// generate the sha1 for the apk ID
-			hasher := sha1.New()
-			data, err := ioutil.ReadFile(apkFilePath)
+			checksum, err := getChecksum(apkFilePath)
 			if err != nil {
 				return nil, err
 			}
-			hasher.Write(data)
-
-			idRaw := hasher.Sum(nil)
-			//apkInfo.ID = fmt.Sprintf("Q1%s", b64.StdEncoding.Encode(hasher.Sum(nil)))
-			log.Println(">>>", string(idRaw))
-
-			/*
-			var buildTime time.Time
-			if apkInfo.BuildDate != "" {
-				buildTime, err = time.Parse("2022/08/19 22:42:41", apkInfo.BuildDate)
-				if err != nil {
-					return nil, err
-				}
-			}
-			*/
-
-			//buildTime := time.Now()
-
-			apkInfoUpstream := &apkrepo.Package{
+			return &apkrepo.Package{
 				Name:             apkInfo.PKGName,
 				Version:          apkInfo.PKGVer,
 				Arch:             apkInfo.Arch,
@@ -183,19 +161,13 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 				Origin:           apkInfo.Origin,
 				Maintainer:       apkInfo.Maintainer,
 				URL:              apkInfo.URL,
-				Checksum:         idRaw,
+				Checksum:         checksum,
 				Dependencies:     apkInfo.Depend,
 				Provides:         apkInfo.Provides,
-				//InstallIf:        strings.Split(apkInfo.InstallIf, " "),
 				Size:             uint64(fileInfo.Size()),
 				InstalledSize:    uint64(apkInfo.Size),
-				//ProviderPriority: 0,
-				//BuildTime:        buildTime,
 				RepoCommit:       apkInfo.Commit,
-				//Replaces:         "",
-			}
-
-			return apkInfoUpstream, nil
+			}, nil
 		}
 	}
 	return nil, fmt.Errorf("unknown error")
@@ -220,4 +192,117 @@ type APKInfo struct {
 	Datahash   string   `ini:"datahash"`
 	Depend     []string `ini:"depend,,allowshadow"`
 	Provides   []string `ini:"provides,,allowshadow"`
+}
+
+
+func getChecksum(apkFilePath string) ([]byte, error) {
+	file, err := os.Open(apkFilePath)
+	if err != nil {
+		return nil, err
+	}
+	streams, _, err := createPackageStreams(file)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("Num streams: "+string(len(streams)))
+	hasher := sha1.New()
+	data, err := ioutil.ReadFile(streams[0])
+	if err != nil {
+		return nil, err
+	}
+	if _, err := hasher.Write(data); err != nil {
+		return nil, err
+	}
+	return hasher.Sum(nil), nil
+}
+
+type chapter struct {
+	begin int64
+	end   int64
+}
+
+func createPackageStreams(source io.Reader) ([]string, string, error) {
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		return []string{}, dir, err
+	}
+
+	indata, err := ioutil.ReadAll(source)
+	if err != nil {
+		return []string{}, dir, err
+	}
+
+	bio := bytes.NewReader(indata)
+
+	gzi, err := gzip.NewReader(bio)
+	if err != nil {
+		return []string{}, dir, err
+	}
+
+	i := 0
+	chapters := []chapter{}
+
+	for {
+		gzi.Multistream(true)
+
+		pos, err := bio.Seek(0, os.SEEK_CUR)
+		if err != nil {
+			return []string{}, dir, err
+		}
+
+		chapter := chapter{
+			begin: pos - 10,
+			end:   int64(bio.Len()),
+		}
+
+		log.Printf("new stream! id=%d @%d", i, pos)
+		if i > 0 {
+			chapters[i-1].end = pos - 10
+		}
+
+		chapters = append(chapters, chapter)
+
+		outF, err := os.Create(fmt.Sprintf("%s/stream-%d.tar", dir, i))
+		if err != nil {
+			return []string{}, dir, err
+		}
+		defer outF.Close()
+
+		if _, err := io.Copy(outF, gzi); err != nil {
+			log.Printf("failed while copying")
+			return []string{}, dir, err
+		}
+
+		i++
+
+		err = gzi.Reset(bio)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("failed while resetting")
+			return []string{}, dir, err
+		}
+	}
+
+	if err := gzi.Close(); err != nil {
+		log.Fatal(err)
+	}
+
+	var fileStreams []string
+	for i, chapter := range chapters {
+		log.Printf("chapter %d, begin: %d, end: %d", i, chapter.begin, chapter.end)
+
+		fileName := fmt.Sprintf("%s/stream-%d.tar.gz", dir, i)
+		outF, err := os.Create(fileName)
+		if err != nil {
+			return []string{}, dir, err
+		}
+		defer outF.Close()
+
+		_, _ = outF.Write(indata[chapter.begin:chapter.end])
+		fileStreams = append(fileStreams, fileName)
+	}
+
+	return fileStreams, dir, err
 }
