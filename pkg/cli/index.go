@@ -204,7 +204,7 @@ func getChecksum(apkFilePath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Num streams: "+string(len(streams)))
+	fmt.Printf("Num streams: %d\n", len(streams))
 	hasher := sha1.New()
 	data, err := ioutil.ReadFile(streams[0])
 	if err != nil {

@@ -16,7 +16,7 @@ docker run --rm -w "${PWD}" -v "${PWD}:${PWD}" -ti --privileged --entrypoint sh 
 make melange install && \ 
   melange keygen && \
   rm -rf packages && \
-  melange build melange.yaml --arch aarch64,amd64 \
+  melange build melange.yaml --arch aarch64 \
     --repository-append packages --keyring-append melange.rsa && \
   melange index && \
   for d in `find packages -type d -mindepth 1`; do \

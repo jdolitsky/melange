@@ -10,7 +10,7 @@ package:
         - "*"
   dependencies:
     runtime:
-      - busybox
+      - python3
 
 environment:
   contents:
@@ -19,11 +19,23 @@ environment:
       - https://dl-cdn.alpinelinux.org/alpine/edge/community
     packages:
       - alpine-baselayout-data
+      - ca-certificates-bundle
       - busybox
+      - gcc
+      - musl-dev
+      - python3
+      - python3-dev
+      - py3-pip
+      - py3-virtualenv
 
 pipeline:
-  - name: Build application
+  - name: Build Python application
     runs: |
-      mkdir -p "${{targets.destdir}}"
-      echo "#!/bin/sh" > "${{targets.destdir}}/boop"
-      echo "echo hello" >> "${{targets.destdir}}/boop"
+      EXECDIR="${{targets.destdir}}/usr/bin"
+      WEBAPPDIR="${{targets.destdir}}/usr/share/webapps/hello-server"
+      mkdir -p "${EXECDIR}" "${WEBAPPDIR}"
+      echo "#!/usr/share/webapps/hello-server/venv/bin/python3" > "${EXECDIR}/hello-server"
+      cat main.py >> "${EXECDIR}/hello-server"
+      chmod +x "${EXECDIR}/hello-server"
+      virtualenv "${WEBAPPDIR}/venv"
+      sh -c "source '${WEBAPPDIR}/venv/bin/activate' && pip install -r requirements.txt"
