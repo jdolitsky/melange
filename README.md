@@ -26,6 +26,15 @@ make melange install && \
 ```
 
 ```
+make melange install && \ 
+melange index && \
+  for d in `find packages -type d -mindepth 1`; do \
+    (cd $d && melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz)
+  done && \
+  tar -xvf packages/aarch64/APKINDEX.tar.gz && cat APKINDEX
+```
+
+```
 melange keygen && \
   rm -rf packages && \
   melange build melange.yaml --arch aarch64,amd64 \
@@ -51,7 +60,7 @@ in another terminal:
 docker run --rm -v "${PWD}":/work \
     distroless.dev/apko build --debug apko.yaml \
     abc:123 output.tar -k melange.rsa.pub \
-    --build-arch amd64,aarch64
+    --build-arch aarch64
 ```
 
 ```
