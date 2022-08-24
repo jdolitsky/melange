@@ -11,12 +11,12 @@ require (
 	github.com/zealic/xignore v0.3.3
 	gitlab.alpinelinux.org/alpine/go v0.5.0
 	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29
-	gopkg.in/ini.v1 v1.66.2
+	gopkg.in/ini.v1 v1.67.0
 	gopkg.in/yaml.v3 v3.0.1
 	sigs.k8s.io/release-utils v0.7.2
 )
 
-replace gitlab.alpinelinux.org/alpine/go => gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220817010642-810c9dd9faed
+replace gitlab.alpinelinux.org/alpine/go => gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220824040534-b1099051e362
 
 require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect

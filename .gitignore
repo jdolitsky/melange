@@ -27,3 +27,6 @@ output.tar
 sbom-*.cdx
 sbom-*.spdx.json
 vendor/
+
+APKINDEX.tar.gz
+DESCRIPTION

@@ -16,7 +16,7 @@ docker run --rm -w "${PWD}" -v "${PWD}:${PWD}" -ti --privileged --entrypoint sh 
 make melange install && \ 
   melange keygen && \
   rm -rf packages && \
-  melange build melange.yaml --arch aarch64 \
+  melange build melange.yaml --arch amd64,aarch64 \
     --repository-append packages --keyring-append melange.rsa && \
   melange index && \
   for d in `find packages -type d -mindepth 1`; do \
@@ -60,7 +60,7 @@ in another terminal:
 docker run --rm -v "${PWD}":/work \
     distroless.dev/apko build --debug apko.yaml \
     abc:123 output.tar -k melange.rsa.pub \
-    --build-arch aarch64
+    --build-arch aarch64,amd64
 ```
 
 ```

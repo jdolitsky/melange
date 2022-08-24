@@ -27,3 +27,4 @@ pipeline:
       mkdir -p "${{targets.destdir}}"
       echo "#!/bin/sh" > "${{targets.destdir}}/boop"
       echo "echo hello" >> "${{targets.destdir}}/boop"
+      chmod +x "${{targets.destdir}}/boop"

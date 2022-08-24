@@ -16,14 +16,12 @@ package cli
 
 import (
 	"archive/tar"
-	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
 	"crypto/sha1"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -65,9 +63,9 @@ func IndexCmd(ctx context.Context, outDir string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read packages directory %s: %w", outDir, err)
 	}
-    for _, arch := range archs {
+	for _, arch := range archs {
 		archName := arch.Name()
-        if !arch.IsDir() {
+		if !arch.IsDir() {
 			log.Printf("warning: found unknown file in packages directory: %s", archName)
 			continue
 		}
@@ -93,7 +91,7 @@ func IndexCmd(ctx context.Context, outDir string) error {
 			packages = append(packages, pkg)
 		}
 		index := &apkrepo.ApkIndex{
-			Packages:    packages,
+			Packages: packages,
 		}
 		archive, err := apkrepo.ArchiveFromIndex(index)
 		if err != nil {
@@ -112,15 +110,21 @@ func IndexCmd(ctx context.Context, outDir string) error {
 	return nil
 }
 
-
 // TODO: upstream this in gitlab
 // From https://github.com/chainguard-dev/apk-repo-generator/blob/5666d7fbe6ac891527d8995f13863b7ec4127def/main.go#L509
 func parseApk(apkFilePath string) (*apkrepo.Package, error) {
-	checksum, err := getChecksum(apkFilePath)
+	file, err := os.Open(apkFilePath)
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.Open(apkFilePath)
+	checksum, err := getApkSHA1Checksum(file)
+	if err != nil {
+		return nil, err
+	}
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+	file, err = os.Open(apkFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -154,20 +158,20 @@ func parseApk(apkFilePath string) (*apkrepo.Package, error) {
 				return nil, err
 			}
 			return &apkrepo.Package{
-				Name:             apkInfo.PKGName,
-				Version:          apkInfo.PKGVer,
-				Arch:             apkInfo.Arch,
-				Description:      apkInfo.PKGDesc,
-				License:          apkInfo.License,
-				Origin:           apkInfo.Origin,
-				Maintainer:       apkInfo.Maintainer,
-				URL:              apkInfo.URL,
-				Checksum:         checksum,
-				Dependencies:     apkInfo.Depend,
-				Provides:         apkInfo.Provides,
-				Size:             uint64(fileInfo.Size()),
-				InstalledSize:    uint64(apkInfo.Size),
-				RepoCommit:       apkInfo.Commit,
+				Name:          apkInfo.PKGName,
+				Version:       apkInfo.PKGVer,
+				Arch:          apkInfo.Arch,
+				Description:   apkInfo.PKGDesc,
+				License:       apkInfo.License,
+				Origin:        apkInfo.Origin,
+				Maintainer:    apkInfo.Maintainer,
+				URL:           apkInfo.URL,
+				Checksum:      checksum,
+				Dependencies:  apkInfo.Depend,
+				Provides:      apkInfo.Provides,
+				Size:          uint64(fileInfo.Size()),
+				InstalledSize: uint64(apkInfo.Size),
+				RepoCommit:    apkInfo.Commit,
 			}, nil
 		}
 	}
@@ -195,127 +199,53 @@ type APKInfo struct {
 	Provides   []string `ini:"provides,,allowshadow"`
 }
 
-
-func getChecksum(apkFilePath string) ([]byte, error) {
-	file, err := os.Open(apkFilePath)
+func getApkSHA1Checksum(r io.Reader) ([]byte, error) {
+	indata, err := io.ReadAll(r)
 	if err != nil {
 		return nil, err
 	}
-	streams, _, err := createPackageStreams(file)
+	bio := bytes.NewReader(indata)
+	totalLen := int64(bio.Len())
+	gzi, err := gzip.NewReader(bio)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("Num streams: %d\n", len(streams))
+	chapters := [][]int64{}
+	i := 0
+	for {
+		gzi.Multistream(false)
+		pos, err := bio.Seek(0, os.SEEK_CUR)
+		if err != nil {
+			return nil, err
+		}
+		chapters = append(chapters, []int64{pos - 10, totalLen})
+		if i > 0 {
+			chapters[i-1][1] = pos - 10
+		}
+		if _, err := io.Copy(io.Discard, gzi); err != nil {
+			return nil, err
+		}
+		err = gzi.Reset(bio)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		i++
+	}
+	if err := gzi.Close(); err != nil {
+		return nil, err
+	}
+	if len(chapters) == 0 {
+		return nil, fmt.Errorf("unknown error, found 0 streams in gzip")
+	}
+	first := chapters[0]
 	hasher := sha1.New()
-	data, err := ioutil.ReadFile(streams[0])
-	if err != nil {
-		return nil, err
-	}
-	if _, err := hasher.Write(data); err != nil {
+	if _, err := hasher.Write(indata[first[0]:first[1]]); err != nil {
 		return nil, err
 	}
 	return hasher.Sum(nil), nil
 }
 
-type chapter struct {
-	begin int64
-	end   int64
-}
-
-func createPackageStreams(source io.Reader) ([]string, string, error) {
-	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		return []string{}, dir, err
-	}
-
-	indata, err := ioutil.ReadAll(bufio.NewReader(source))
-	if err != nil {
-		return []string{}, dir, err
-	}
-
-	//totalLen := int64(len(indata))
-	bio := bytes.NewReader(indata)
-	totalLen := int64(bio.Len())
-	gzi, err := gzip.NewReader(bio)
-	if err != nil {
-		return []string{}, dir, err
-	}
-	//gzi.Multistream(false)
-
-	i := 0
-	chapters := []chapter{}
-
-	for {
-		gzi.Multistream(false)
-
-		pos, err := bio.Seek(0, os.SEEK_CUR)
-		if err != nil {
-			return []string{}, dir, err
-		}
-
-		chapter := chapter{
-			begin: pos - 10,
-			end:   totalLen,
-		}
-
-		log.Printf("new stream! id=%d @%d", i, pos)
-
-		chapters = append(chapters, chapter)
-
-		if i > 0 {
-			
-			chapters[i-1].end = pos - 10
-			//chapters[i].end = pos - 10
-			fmt.Printf("OH: %d\n", chapters[i-1].end)
-			fmt.Printf("OH 2: %d\n", chapters[i].end)
-		}
-
-		//totalLen
-		
-		
-
-		outF, err := os.Create(fmt.Sprintf("%s/stream-%d.tar", dir, i))
-		if err != nil {
-			return []string{}, dir, err
-		}
-		defer outF.Close()
-
-		if _, err := io.Copy(outF, gzi); err != nil {
-			log.Printf("failed while copying")
-			return []string{}, dir, err
-		}
-
-		i++
-
-		err = gzi.Reset(bio)
-		if err == io.EOF {
-			fmt.Println("BREAKIN")
-			break
-		}
-		if err != nil {
-			log.Printf("failed while resetting")
-			return []string{}, dir, err
-		}
-	}
-
-	if err := gzi.Close(); err != nil {
-		log.Fatal(err)
-	}
-
-	var fileStreams []string
-	for i, chapter := range chapters {
-		log.Printf("chapter %d, begin: %d, end: %d", i, chapter.begin, chapter.end)
-
-		fileName := fmt.Sprintf("%s/stream-%d.tar.gz", dir, i)
-		outF, err := os.Create(fileName)
-		if err != nil {
-			return []string{}, dir, err
-		}
-		defer outF.Close()
-
-		_, _ = outF.Write(indata[chapter.begin:chapter.end])
-		fileStreams = append(fileStreams, fileName)
-	}
-
-	return fileStreams, dir, err
-}
+// https://dl-cdn.alpinelinux.org/alpine/edge/main/aarch64/curl-7.84.0-r2.apk
