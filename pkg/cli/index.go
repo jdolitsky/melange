@@ -15,11 +15,7 @@
 package cli
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"context"
-	"crypto/sha1"
 	"fmt"
 	"io"
 	"log"
@@ -31,7 +27,6 @@ import (
 
 	"github.com/spf13/cobra"
 	apkrepo "gitlab.alpinelinux.org/alpine/go/pkg/repository"
-	"gopkg.in/ini.v1"
 )
 
 func Index() *cobra.Command {
@@ -84,7 +79,11 @@ func IndexCmd(ctx context.Context, outDir string) error {
 			}
 			log.Printf("processing apk package %s/%s", archName, apkName)
 			apkFilePath := filepath.Join(archDir, apkName)
-			pkg, err := parseApk(apkFilePath)
+			apkFile, err := os.Open(apkFilePath)
+			if err != nil {
+				return fmt.Errorf("failed to open apk package %s/%s: %w", archName, apkName, err)
+			}
+			pkg, err := apkrepo.ParsePackage(apkFile)
 			if err != nil {
 				return fmt.Errorf("failed to parse apk package %s/%s: %w", archName, apkName, err)
 			}
@@ -109,143 +108,3 @@ func IndexCmd(ctx context.Context, outDir string) error {
 	}
 	return nil
 }
-
-// TODO: upstream this in gitlab
-// From https://github.com/chainguard-dev/apk-repo-generator/blob/5666d7fbe6ac891527d8995f13863b7ec4127def/main.go#L509
-func parseApk(apkFilePath string) (*apkrepo.Package, error) {
-	file, err := os.Open(apkFilePath)
-	if err != nil {
-		return nil, err
-	}
-	checksum, err := getApkSHA1Checksum(file)
-	if err != nil {
-		return nil, err
-	}
-	if err := file.Close(); err != nil {
-		return nil, err
-	}
-	file, err = os.Open(apkFilePath)
-	if err != nil {
-		return nil, err
-	}
-	fileInfo, err := os.Lstat(apkFilePath)
-	if err != nil {
-		return nil, err
-	}
-	gzRead, err := gzip.NewReader(file)
-	if err != nil {
-		return nil, err
-	}
-	tarRead := tar.NewReader(gzRead)
-	for {
-		cur, err := tarRead.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return nil, err
-		}
-		if cur.Typeflag != tar.TypeReg {
-			continue
-		}
-		if cur.Name == ".PKGINFO" {
-			cfg, err := ini.ShadowLoad(tarRead)
-			if err != nil {
-				return nil, fmt.Errorf("Fail to read file: %w", err)
-			}
-			apkInfo := new(APKInfo)
-			err = cfg.MapTo(apkInfo)
-			if err != nil {
-				return nil, err
-			}
-			return &apkrepo.Package{
-				Name:          apkInfo.PKGName,
-				Version:       apkInfo.PKGVer,
-				Arch:          apkInfo.Arch,
-				Description:   apkInfo.PKGDesc,
-				License:       apkInfo.License,
-				Origin:        apkInfo.Origin,
-				Maintainer:    apkInfo.Maintainer,
-				URL:           apkInfo.URL,
-				Checksum:      checksum,
-				Dependencies:  apkInfo.Depend,
-				Provides:      apkInfo.Provides,
-				Size:          uint64(fileInfo.Size()),
-				InstalledSize: uint64(apkInfo.Size),
-				RepoCommit:    apkInfo.Commit,
-			}, nil
-		}
-	}
-	return nil, fmt.Errorf("unknown error")
-}
-
-// TODO: remove / upstream to gitlab
-type APKInfo struct {
-	ID         string
-	PKGName    string   `ini:"pkgname"`
-	PKGVer     string   `ini:"pkgver"`
-	PKGDesc    string   `ini:"pkgdesc"`
-	URL        string   `ini:"url"`
-	BuildDate  string   `ini:"builddate"`
-	Packager   string   `ini:"packager"`
-	Size       int      `ini:"size"`
-	Arch       string   `ini:"arch"`
-	Origin     string   `ini:"origin"`
-	Commit     string   `ini:"commit"`
-	Maintainer string   `ini:"maintainer"`
-	License    string   `ini:"license"`
-	InstallIf  string   `ini:"install_if"`
-	Datahash   string   `ini:"datahash"`
-	Depend     []string `ini:"depend,,allowshadow"`
-	Provides   []string `ini:"provides,,allowshadow"`
-}
-
-func getApkSHA1Checksum(r io.Reader) ([]byte, error) {
-	indata, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	bio := bytes.NewReader(indata)
-	totalLen := int64(bio.Len())
-	gzi, err := gzip.NewReader(bio)
-	if err != nil {
-		return nil, err
-	}
-	chapters := [][]int64{}
-	i := 0
-	for {
-		gzi.Multistream(false)
-		pos, err := bio.Seek(0, os.SEEK_CUR)
-		if err != nil {
-			return nil, err
-		}
-		chapters = append(chapters, []int64{pos - 10, totalLen})
-		if i > 0 {
-			chapters[i-1][1] = pos - 10
-		}
-		if _, err := io.Copy(io.Discard, gzi); err != nil {
-			return nil, err
-		}
-		err = gzi.Reset(bio)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		i++
-	}
-	if err := gzi.Close(); err != nil {
-		return nil, err
-	}
-	if len(chapters) == 0 {
-		return nil, fmt.Errorf("unknown error, found 0 streams in gzip")
-	}
-	first := chapters[0]
-	hasher := sha1.New()
-	if _, err := hasher.Write(indata[first[0]:first[1]]); err != nil {
-		return nil, err
-	}
-	return hasher.Sum(nil), nil
-}
-
-// https://dl-cdn.alpinelinux.org/alpine/edge/main/aarch64/curl-7.84.0-r2.apk

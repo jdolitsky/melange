@@ -11,7 +11,6 @@ require (
 	github.com/zealic/xignore v0.3.3
 	gitlab.alpinelinux.org/alpine/go v0.5.0
 	golang.org/x/sync v0.0.0-20220513210516-0976fa681c29
-	gopkg.in/ini.v1 v1.67.0
 	gopkg.in/yaml.v3 v3.0.1
 	sigs.k8s.io/release-utils v0.7.2
 )
@@ -63,5 +62,6 @@ require (
 	golang.org/x/net v0.0.0-20220524220425-1d687d428aca // indirect
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a // indirect
 	golang.org/x/text v0.3.7 // indirect
+	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
