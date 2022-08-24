@@ -15,7 +15,7 @@ require (
 	sigs.k8s.io/release-utils v0.7.2
 )
 
-replace gitlab.alpinelinux.org/alpine/go => gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220824040534-b1099051e362
+replace gitlab.alpinelinux.org/alpine/go => gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220824043453-f93540782d0c
 
 require (
 	github.com/PuerkitoBio/purell v1.1.1 // indirect

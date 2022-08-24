@@ -1683,8 +1683,8 @@ github.com/zalando/go-keyring v0.1.0/go.mod h1:RaxNwUITJaHVdQ0VC7pELPZ3tOWn13nr0
 github.com/zalando/go-keyring v0.1.1/go.mod h1:OIC+OZ28XbmwFxU/Rp9V7eKzZjamBJwRzC8UFJH9+L8=
 github.com/zealic/xignore v0.3.3 h1:EpLXUgZY/JEzFkTc+Y/VYypzXtNz+MSOMVCGW5Q4CKQ=
 github.com/zealic/xignore v0.3.3/go.mod h1:lhS8V7fuSOtJOKsvKI7WfsZE276/7AYEqokv3UiqEAU=
-gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220824040534-b1099051e362 h1:3MQ48IkunLQ3MSBR8qE++l9NdIzPjTdwjx7GXvF+f5s=
-gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220824040534-b1099051e362/go.mod h1:nqCQNE3MNmF1c6SNGiJbvgzxUqOLKT6f9IyJY52WyJU=
+gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220824043453-f93540782d0c h1:JorRIV5DBlhVAEpMZE6nn3F/tm1aD6uVV8KiGiXtZKg=
+gitlab.alpinelinux.org/jdolitsky/go v0.5.2-0.20220824043453-f93540782d0c/go.mod h1:nqCQNE3MNmF1c6SNGiJbvgzxUqOLKT6f9IyJY52WyJU=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.etcd.io/bbolt v1.3.3/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=
 go.etcd.io/bbolt v1.3.4/go.mod h1:G5EMThwa9y8QZGBClrRx5EY+Yw9kAhnjy3bSjsnlVTQ=

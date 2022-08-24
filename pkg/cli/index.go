@@ -20,8 +20,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
-	"strings"
 
 	// nolint:gosec
 
@@ -30,81 +28,48 @@ import (
 )
 
 func Index() *cobra.Command {
-	var outDir string
-
+	var apkIndexFilename string
 	cmd := &cobra.Command{
 		Use:     "index",
-		Short:   "Generate an APK index",
-		Long:    `Generate an APK index.`,
-		Example: `  melange index`,
-		Args:    cobra.MinimumNArgs(0),
+		Short:   "Creates a repository index from a list of package files",
+		Long:    `Creates a repository index from a list of package files.`,
+		Example: `  melange index -o APKINDEX.tar.gz *.apk`,
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return IndexCmd(cmd.Context(), outDir)
+			return IndexCmd(cmd.Context(), apkIndexFilename, args)
 		},
 	}
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		cwd = "."
-	}
-
-	cmd.Flags().StringVar(&outDir, "out-dir", filepath.Join(cwd, "packages"), "directory where packages will be output")
-
+	cmd.Flags().StringVarP(&apkIndexFilename, "output", "o", "APKINDEX.tar.gz", "Output generated index to FILE")
 	return cmd
 }
 
-func IndexCmd(ctx context.Context, outDir string) error {
-	archs, err := os.ReadDir(outDir)
+func IndexCmd(ctx context.Context, apkIndexFilename string, apkFiles []string) error {
+	packages := []*apkrepo.Package{}
+	for _, apkFile := range apkFiles {
+		log.Printf("processing package %s", apkFile)
+		f, err := os.Open(apkFile)
+		if err != nil {
+			return fmt.Errorf("failed to open package %s: %w", apkFile, err)
+		}
+		pkg, err := apkrepo.ParsePackage(f)
+		if err != nil {
+			return fmt.Errorf("failed to parse package %s: %w", apkFile, err)
+		}
+		packages = append(packages, pkg)
+	}
+	index := &apkrepo.ApkIndex{
+		Packages: packages,
+	}
+	log.Printf("generating index at %s", apkIndexFilename)
+	archive, err := apkrepo.ArchiveFromIndex(index)
 	if err != nil {
-		return fmt.Errorf("failed to read packages directory %s: %w", outDir, err)
+		return err
 	}
-	for _, arch := range archs {
-		archName := arch.Name()
-		if !arch.IsDir() {
-			log.Printf("warning: found unknown file in packages directory: %s", archName)
-			continue
-		}
-		log.Printf("generating APKINDEX.tar.gz for arch directory %s/", archName)
-		archDir := filepath.Join(outDir, archName)
-		apks, err := os.ReadDir(archDir)
-		if err != nil {
-			return fmt.Errorf("failed to read arch directory %s: %w", archDir, err)
-		}
-		packages := []*apkrepo.Package{}
-		for _, apk := range apks {
-			apkName := apk.Name()
-			if apk.IsDir() || !strings.HasSuffix(apkName, ".apk") {
-				log.Printf("warning: found unknown file in arch %s directory: %s", archName, apkName)
-				continue
-			}
-			log.Printf("processing apk package %s/%s", archName, apkName)
-			apkFilePath := filepath.Join(archDir, apkName)
-			apkFile, err := os.Open(apkFilePath)
-			if err != nil {
-				return fmt.Errorf("failed to open apk package %s/%s: %w", archName, apkName, err)
-			}
-			pkg, err := apkrepo.ParsePackage(apkFile)
-			if err != nil {
-				return fmt.Errorf("failed to parse apk package %s/%s: %w", archName, apkName, err)
-			}
-			packages = append(packages, pkg)
-		}
-		index := &apkrepo.ApkIndex{
-			Packages: packages,
-		}
-		archive, err := apkrepo.ArchiveFromIndex(index)
-		if err != nil {
-			return err
-		}
-		apkIndexFilename := filepath.Join(outDir, archName, "APKINDEX.tar.gz")
-		outFile, err := os.Create(apkIndexFilename)
-		if err != nil {
-			return err
-		}
-		defer outFile.Close()
-		if _, err = io.Copy(outFile, archive); err != nil {
-			return err
-		}
+	outFile, err := os.Create(apkIndexFilename)
+	if err != nil {
+		return err
 	}
-	return nil
+	defer outFile.Close()
+	_, err = io.Copy(outFile, archive)
+	return err
 }

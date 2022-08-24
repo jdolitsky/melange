@@ -35,12 +35,13 @@ melange index && \
 ```
 
 ```
+make melange install && \ 
 melange keygen && \
   rm -rf packages && \
   melange build melange.yaml --arch aarch64,amd64 \
     --repository-append packages --keyring-append melange.rsa && \
   for d in `find packages -type d -mindepth 1`; do \
-    (cd $d && apk index -o APKINDEX.tar.gz *.apk && melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz)
+    (cd $d && melange index -o APKINDEX.tar.gz *.apk && melange sign-index --signing-key=../../melange.rsa APKINDEX.tar.gz)
   done && \
   tar -xvf packages/aarch64/APKINDEX.tar.gz && cat APKINDEX
 ```
