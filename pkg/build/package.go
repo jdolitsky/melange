@@ -598,5 +598,12 @@ func (pc *PackageContext) EmitPackage() error {
 
 	pc.Logger.Printf("wrote %s", outFile.Name())
 
+	if pc.Context.GenerateIndex {
+		pc.Logger.Println("generating APKINDEX.tar.gz")
+		if pc.wantSignature() {
+			pc.Logger.Println("signing APKINDEX.tar.gz")
+		}
+	}
+
 	return nil
 }

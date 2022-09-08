@@ -125,6 +125,7 @@ type Context struct {
 	SigningKey        string
 	SigningPassphrase string
 	Template          string
+	GenerateIndex     bool
 	UseProot          bool
 	EmptyWorkspace    bool
 	OutDir            string
@@ -294,6 +295,14 @@ func WithSourceDir(sourceDir string) Option {
 func WithSigningKey(signingKey string) Option {
 	return func(ctx *Context) error {
 		ctx.SigningKey = signingKey
+		return nil
+	}
+}
+
+// WithGenerateIndex sets whether or not the apk index should be generated.
+func WithGenerateIndex(generateIndex bool) Option {
+	return func(ctx *Context) error {
+		ctx.GenerateIndex = generateIndex
 		return nil
 	}
 }
