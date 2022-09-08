@@ -15,11 +15,11 @@
 package cli
 
 import (
+	"context" // nolint:gosec
 	"log"
 
+	"chainguard.dev/melange/internal/sign"
 	"github.com/spf13/cobra"
-
-	melangesign "chainguard.dev/melange/pkg/sign"
 )
 
 func SignIndex() *cobra.Command {
@@ -32,12 +32,16 @@ func SignIndex() *cobra.Command {
 		Example: `  melange sign-index [--signing-key=key.rsa] <APKINDEX.tar.gz>`,
 		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logger := log.New(log.Writer(), "melange: ", log.LstdFlags|log.Lmsgprefix)
-			return melangesign.SignIndex(logger, signingKey, args[0])
+			return SignIndexCmd(cmd.Context(), signingKey, args[0])
 		},
 	}
 
 	cmd.Flags().StringVar(&signingKey, "signing-key", "melange.rsa", "the signing key to use")
 
 	return cmd
+}
+
+func SignIndexCmd(ctx context.Context, signingKey string, indexFile string) error {
+	logger := log.New(log.Writer(), "melange: ", log.LstdFlags|log.Lmsgprefix)
+	return sign.SignIndex(logger, signingKey, indexFile)
 }
