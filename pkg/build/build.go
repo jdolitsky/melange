@@ -35,7 +35,10 @@ import (
 	apko_types "chainguard.dev/apko/pkg/build/types"
 	apkofs "chainguard.dev/apko/pkg/fs"
 	"github.com/zealic/xignore"
+	apkrepo "gitlab.alpinelinux.org/alpine/go/repository"
 	"gopkg.in/yaml.v3"
+
+	melangesign "chainguard.dev/melange/pkg/sign"
 )
 
 type Scriptlets struct {
@@ -712,6 +715,57 @@ func (ctx *Context) BuildPackage() error {
 	for _, sp := range ctx.Configuration.Subpackages {
 		if err := sp.Emit(&pctx); err != nil {
 			return fmt.Errorf("unable to emit package: %w", err)
+		}
+	}
+
+	// generate APKINDEX.tar.gz and sign it
+	if ctx.GenerateIndex {
+		packagesDir := filepath.Join(pctx.Context.OutDir, pctx.Context.Arch.ToAPK())
+		ctx.Logger.Printf("generating apk index from packages in %s", packagesDir)
+		packages := []*apkrepo.Package{}
+		files, err := os.ReadDir(packagesDir)
+		if err != nil {
+			return fmt.Errorf("unable to list packages: %w", err)
+		}
+		for _, file := range files {
+			n := filepath.Join(packagesDir, file.Name())
+			if !file.IsDir() && strings.HasSuffix(n, ".apk") {
+				ctx.Logger.Printf("processing package %s", n)
+				f, err := os.Open(n)
+				if err != nil {
+					return fmt.Errorf("failed to open package %s: %w", n, err)
+				}
+				pkg, err := apkrepo.ParsePackage(f)
+				if err != nil {
+					return fmt.Errorf("failed to parse package %s: %w", n, err)
+				}
+				packages = append(packages, pkg)
+				f.Close()
+			}
+		}
+		index := &apkrepo.ApkIndex{
+			Packages: packages,
+		}
+		indexPath := filepath.Join(packagesDir, "APKINDEX.tar.gz")
+		ctx.Logger.Printf("writing apk index to %s", indexPath)
+		archive, err := apkrepo.ArchiveFromIndex(index)
+		if err != nil {
+			return fmt.Errorf("failed to create archive from index object: %w", err)
+		}
+		outFile, err := os.Create(indexPath)
+		if err != nil {
+			return fmt.Errorf("failed to create archive file: %w", err)
+		}
+		if _, err := io.Copy(outFile, archive); err != nil {
+			return fmt.Errorf("failed to write contents to archive file: %w", err)
+		}
+		outFile.Close()
+
+		if ctx.SigningKey != "" {
+			ctx.Logger.Printf("signing apk index at %s", indexPath)
+			if err := melangesign.SignIndex(ctx.Logger, ctx.SigningKey, indexPath); err != nil {
+				return fmt.Errorf("failed to sign apk index: %w", err)
+			}
 		}
 	}
 
