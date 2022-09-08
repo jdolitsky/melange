@@ -30,54 +30,7 @@ import (
 	"github.com/psanford/memfs"
 )
 
-func indexIsAlreadySigned(indexFile string) bool {
-	index, err := os.Open(indexFile)
-	if err != nil {
-		log.Fatalf("cannot open index %s: %v", indexFile, err)
-	}
-	defer index.Close()
-
-	gzi, err := gzip.NewReader(index)
-	if err != nil {
-		log.Fatalf("cannot open index %s: %v", indexFile, err)
-	}
-	defer gzi.Close()
-
-	tari := tar.NewReader(gzi)
-	for {
-		hdr, err := tari.Next()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Fatalf("cannot read index %s: %v", indexFile, err)
-		}
-
-		if strings.HasPrefix(hdr.Name, ".SIGN.RSA") {
-			return true
-		}
-	}
-
-	return false
-}
-
-func readAndHashIndex(indexFile string) ([]byte, []byte, error) {
-	index, err := os.Open(indexFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to open index for signing: %w", err)
-	}
-	defer index.Close()
-
-	digest := sha1.New() // nolint:gosec
-	hasher := io.TeeReader(index, digest)
-	indexBuf, err := io.ReadAll(hasher)
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to read index: %w", err)
-	}
-
-	return indexBuf, digest.Sum(nil), nil
-}
-
+// TODO: solidify this API and move into pkg/
 func SignIndex(logger *log.Logger, signingKey string, indexFile string) error {
 	if indexIsAlreadySigned(indexFile) {
 		logger.Printf("index %s is already signed, doing nothing", indexFile)
@@ -138,4 +91,52 @@ func SignIndex(logger *log.Logger, signingKey string, indexFile string) error {
 	logger.Printf("signed index %s with key %s", indexFile, signingKey)
 
 	return nil
+}
+
+func indexIsAlreadySigned(indexFile string) bool {
+	index, err := os.Open(indexFile)
+	if err != nil {
+		log.Fatalf("cannot open index %s: %v", indexFile, err)
+	}
+	defer index.Close()
+
+	gzi, err := gzip.NewReader(index)
+	if err != nil {
+		log.Fatalf("cannot open index %s: %v", indexFile, err)
+	}
+	defer gzi.Close()
+
+	tari := tar.NewReader(gzi)
+	for {
+		hdr, err := tari.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Fatalf("cannot read index %s: %v", indexFile, err)
+		}
+
+		if strings.HasPrefix(hdr.Name, ".SIGN.RSA") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func readAndHashIndex(indexFile string) ([]byte, []byte, error) {
+	index, err := os.Open(indexFile)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to open index for signing: %w", err)
+	}
+	defer index.Close()
+
+	digest := sha1.New() // nolint:gosec
+	hasher := io.TeeReader(index, digest)
+	indexBuf, err := io.ReadAll(hasher)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to read index: %w", err)
+	}
+
+	return indexBuf, digest.Sum(nil), nil
 }

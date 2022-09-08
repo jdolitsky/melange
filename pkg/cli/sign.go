@@ -15,7 +15,7 @@
 package cli
 
 import (
-	"context" // nolint:gosec
+	"context"
 	"log"
 
 	"chainguard.dev/melange/internal/sign"
@@ -42,6 +42,5 @@ func SignIndex() *cobra.Command {
 }
 
 func SignIndexCmd(ctx context.Context, signingKey string, indexFile string) error {
-	logger := log.New(log.Writer(), "melange: ", log.LstdFlags|log.Lmsgprefix)
-	return sign.SignIndex(logger, signingKey, indexFile)
+	return sign.SignIndex(log.Default(), signingKey, indexFile)
 }

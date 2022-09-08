@@ -35,10 +35,10 @@ import (
 	apko_types "chainguard.dev/apko/pkg/build/types"
 	apkofs "chainguard.dev/apko/pkg/fs"
 	"github.com/zealic/xignore"
-	apkrepo "gitlab.alpinelinux.org/alpine/go/repository"
 	"gopkg.in/yaml.v3"
 
-	melangesign "chainguard.dev/melange/pkg/sign"
+	"chainguard.dev/melange/internal/index"
+	"chainguard.dev/melange/internal/sign"
 )
 
 type Scriptlets struct {
@@ -722,48 +722,25 @@ func (ctx *Context) BuildPackage() error {
 	if ctx.GenerateIndex {
 		packagesDir := filepath.Join(pctx.Context.OutDir, pctx.Context.Arch.ToAPK())
 		ctx.Logger.Printf("generating apk index from packages in %s", packagesDir)
-		packages := []*apkrepo.Package{}
 		files, err := os.ReadDir(packagesDir)
 		if err != nil {
 			return fmt.Errorf("unable to list packages: %w", err)
 		}
+		apkFiles := []string{}
 		for _, file := range files {
 			n := filepath.Join(packagesDir, file.Name())
 			if !file.IsDir() && strings.HasSuffix(n, ".apk") {
-				ctx.Logger.Printf("processing package %s", n)
-				f, err := os.Open(n)
-				if err != nil {
-					return fmt.Errorf("failed to open package %s: %w", n, err)
-				}
-				pkg, err := apkrepo.ParsePackage(f)
-				if err != nil {
-					return fmt.Errorf("failed to parse package %s: %w", n, err)
-				}
-				packages = append(packages, pkg)
-				f.Close()
+				apkFiles = append(apkFiles, n)
 			}
 		}
-		index := &apkrepo.ApkIndex{
-			Packages: packages,
+		apkIndexFilename := filepath.Join(packagesDir, "APKINDEX.tar.gz")
+		if err := index.Index(ctx.Logger, apkIndexFilename, apkFiles); err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
 		}
-		indexPath := filepath.Join(packagesDir, "APKINDEX.tar.gz")
-		ctx.Logger.Printf("writing apk index to %s", indexPath)
-		archive, err := apkrepo.ArchiveFromIndex(index)
-		if err != nil {
-			return fmt.Errorf("failed to create archive from index object: %w", err)
-		}
-		outFile, err := os.Create(indexPath)
-		if err != nil {
-			return fmt.Errorf("failed to create archive file: %w", err)
-		}
-		if _, err := io.Copy(outFile, archive); err != nil {
-			return fmt.Errorf("failed to write contents to archive file: %w", err)
-		}
-		outFile.Close()
 
 		if ctx.SigningKey != "" {
-			ctx.Logger.Printf("signing apk index at %s", indexPath)
-			if err := melangesign.SignIndex(ctx.Logger, ctx.SigningKey, indexPath); err != nil {
+			ctx.Logger.Printf("signing apk index at %s", apkIndexFilename)
+			if err := sign.SignIndex(ctx.Logger, ctx.SigningKey, apkIndexFilename); err != nil {
 				return fmt.Errorf("failed to sign apk index: %w", err)
 			}
 		}
