@@ -17,31 +17,42 @@ package container
 import (
 	"fmt"
 	"os/exec"
+
+	apko_build "chainguard.dev/apko/pkg/build"
+	apko_types "chainguard.dev/apko/pkg/build/types"
+	"github.com/google/go-containerregistry/pkg/name"
 )
 
 type Runner interface {
 	TestUsability() bool
-	NeedsImage() bool
+	// OCIImageLoader returns a Loader that will load an OCI image from a stream.
+	// If the specific Runner does not need one, it should return nil, in which case the filesystem layout is bind-mounted
+	// to / in the container.
+	// If the specific Runner does need one, it should return the Loader, which will be used to load the provided image
+	// as a tar stream into the Loader. That image will be used as the root when StartPod() the container.
+	OCIImageLoader() Loader
 	StartPod(cfg *Config) error
 	Run(cfg *Config, cmd ...string) error
 	TerminatePod(cfg *Config) error
+	// TempDir returns the base for temporary directory, or "" if whatever is provided by the system is fine
+	TempDir() string
 }
 
-// GetRunner returns the preferred runner implementation for the
-// given environment.
-func GetRunner() (Runner, error) {
-	runners := []Runner{
-		BubblewrapRunner(),
-		DockerRunner(),
-	}
+type Loader interface {
+	LoadImage(layerTarGZ string, arch apko_types.Architecture, bc *apko_build.Context) (hash name.Digest, err error)
+}
 
-	for _, runner := range runners {
-		if runner.TestUsability() {
-			return runner, nil
-		}
+// GetRunner returns the requested runner implementation.
+func GetRunner(s string) (Runner, error) {
+	switch s {
+	case "bubblewrap":
+		return BubblewrapRunner(), nil
+	case "docker":
+		return DockerRunner(), nil
+	case "lima":
+		return LimaRunner()
 	}
-
-	return nil, fmt.Errorf("no suitable runner implementation found")
+	return nil, fmt.Errorf("unknown virtualizer %q", s)
 }
 
 // monitorCmd sets up the stdout/stderr pipes and then supervises

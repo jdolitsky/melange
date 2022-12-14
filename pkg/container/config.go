@@ -16,6 +16,8 @@ package container
 
 import (
 	"log"
+
+	apko_types "chainguard.dev/apko/pkg/build/types"
 )
 
 type BindMount struct {
@@ -34,4 +36,5 @@ type Config struct {
 	Environment  map[string]string
 	ImgDigest    string
 	PodID        string
+	Arch         apko_types.Architecture
 }
