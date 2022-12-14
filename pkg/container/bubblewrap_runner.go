@@ -19,17 +19,16 @@ import (
 	"os/exec"
 )
 
-type BWRunner struct {
-	Runner
+type bubblewrap struct {
 }
 
 // BubblewrapRunner returns a Bubblewrap Runner implementation.
 func BubblewrapRunner() Runner {
-	return &BWRunner{}
+	return &bubblewrap{}
 }
 
 // Run runs a Bubblewrap task given a Config and command string.
-func (bw *BWRunner) Run(cfg *Config, args ...string) error {
+func (bw *bubblewrap) Run(cfg *Config, args ...string) error {
 	baseargs := []string{}
 
 	for _, bind := range cfg.Mounts {
@@ -58,7 +57,7 @@ func (bw *BWRunner) Run(cfg *Config, args ...string) error {
 
 // TestUsability determines if the Bubblewrap runner can be used
 // as a container runner.
-func (bw *BWRunner) TestUsability() bool {
+func (bw *bubblewrap) TestUsability() bool {
 	_, err := exec.LookPath("bwrap")
 	if err != nil {
 		log.Printf("cannot use bubblewrap for containers: bwrap not found on $PATH")
@@ -68,20 +67,24 @@ func (bw *BWRunner) TestUsability() bool {
 	return true
 }
 
-// NeedsImage determines whether an image is needed for the
-// given runner method.  For Bubblewrap, this is false.
-func (bw *BWRunner) NeedsImage() bool {
-	return false
+// OCIImageLoader used to load OCI images in, if needed. bubblewrap does not need it.
+func (bw *bubblewrap) OCIImageLoader() Loader {
+	return nil
+}
+
+// TempDir returns the base for temporary directory. For bubblewrap, this is empty.
+func (bw *bubblewrap) TempDir() string {
+	return ""
 }
 
 // StartPod starts a pod if necessary.  Not implemented for
 // Bubblewrap runners.
-func (bw *BWRunner) StartPod(cfg *Config) error {
+func (bw *bubblewrap) StartPod(cfg *Config) error {
 	return nil
 }
 
 // TerminatePod terminates a pod if necessary.  Not implemented
 // for Bubblewrap runners.
-func (bw *BWRunner) TerminatePod(cfg *Config) error {
+func (bw *bubblewrap) TerminatePod(cfg *Config) error {
 	return nil
 }

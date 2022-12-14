@@ -20,25 +20,29 @@ import (
 	"log"
 	"os"
 
+	apko_build "chainguard.dev/apko/pkg/build"
+	apko_oci "chainguard.dev/apko/pkg/build/oci"
+	apko_types "chainguard.dev/apko/pkg/build/types"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/google/go-containerregistry/pkg/name"
 )
 
-type DKRunner struct {
-	Runner
+// docker is a Runner implementation that uses the docker library.
+type docker struct {
 }
 
 // DockerRunner returns a Docker Runner implementation.
 func DockerRunner() Runner {
-	return &DKRunner{}
+	return &docker{}
 }
 
 // StartPod starts a pod for supporting a Docker task, if
 // necessary.
-func (dk *DKRunner) StartPod(cfg *Config) error {
+func (dk *docker) StartPod(cfg *Config) error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return err
@@ -80,7 +84,7 @@ func (dk *DKRunner) StartPod(cfg *Config) error {
 
 // TerminatePod terminates a pod for supporting a Docker task,
 // if necessary.
-func (dk *DKRunner) TerminatePod(cfg *Config) error {
+func (dk *docker) TerminatePod(cfg *Config) error {
 	if cfg.PodID == "" {
 		return fmt.Errorf("pod not running")
 	}
@@ -103,8 +107,66 @@ func (dk *DKRunner) TerminatePod(cfg *Config) error {
 	return nil
 }
 
+// TestUsability determines if the Docker runner can be used
+// as a container runner.
+func (dk *docker) TestUsability() bool {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Printf("cannot use docker for containers: %v", err)
+		return false
+	}
+	defer cli.Close()
+
+	_, err = cli.Ping(context.Background())
+	if err != nil {
+		log.Printf("cannot use docker for containers: %v", err)
+		return false
+	}
+
+	return true
+}
+
+// OCIImageLoader create a loader to load an OCI image into the docker daemon.
+func (dk *docker) OCIImageLoader() Loader {
+	return &dockerLoader{}
+}
+
+// TempDir returns the base for temporary directory. For docker
+// this is whatever the system provides.
+func (dk *docker) TempDir() string {
+	return ""
+}
+
+// waitForCommand waits for a command to complete in the pod.
+func (dk *docker) waitForCommand(cfg *Config, ctx context.Context, attachResp types.HijackedResponse, taskIDResp types.IDResponse) error {
+	stdoutPipeR, stdoutPipeW, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+
+	stderrPipeR, stderrPipeW, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+
+	finishStdout := make(chan struct{})
+	finishStderr := make(chan struct{})
+
+	go monitorPipe(cfg.Logger, stdoutPipeR, finishStdout)
+	go monitorPipe(cfg.Logger, stderrPipeR, finishStderr)
+	_, err = stdcopy.StdCopy(stdoutPipeW, stderrPipeW, attachResp.Reader)
+
+	stdoutPipeW.Close()
+	stderrPipeW.Close()
+
+	<-finishStdout
+	<-finishStderr
+
+	return err
+}
+
 // Run runs a Docker task given a Config and command string.
-func (dk *DKRunner) Run(cfg *Config, args ...string) error {
+func (dk *docker) Run(cfg *Config, args ...string) error {
 	if cfg.PodID == "" {
 		return fmt.Errorf("pod not running")
 	}
@@ -161,55 +223,15 @@ func (dk *DKRunner) Run(cfg *Config, args ...string) error {
 	}
 }
 
-// TestUsability determines if the Docker runner can be used
-// as a container runner.
-func (dk *DKRunner) TestUsability() bool {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+type dockerLoader struct{}
+
+func (d dockerLoader) LoadImage(layerTarGZ string, arch apko_types.Architecture, bc *apko_build.Context) (dig name.Digest, err error) {
+	dig, _, err = apko_oci.PublishImageFromLayer(
+		layerTarGZ, bc.ImageConfiguration, bc.Options.SourceDateEpoch, arch,
+		bc.Logger(), bc.Options.SBOMPath, bc.Options.SBOMFormats, true, false, "melange:latest")
 	if err != nil {
-		log.Printf("cannot use docker for containers: %v", err)
-		return false
+		return dig, err
 	}
-	defer cli.Close()
+	return dig, nil
 
-	_, err = cli.Ping(context.Background())
-	if err != nil {
-		log.Printf("cannot use docker for containers: %v", err)
-		return false
-	}
-
-	return true
-}
-
-// NeedsImage determines whether an image is needed for the
-// given runner method.  For Docker, this is true.
-func (dk *DKRunner) NeedsImage() bool {
-	return true
-}
-
-// waitForCommand waits for a command to complete in the pod.
-func (dk *DKRunner) waitForCommand(cfg *Config, ctx context.Context, attachResp types.HijackedResponse, taskIDResp types.IDResponse) error {
-	stdoutPipeR, stdoutPipeW, err := os.Pipe()
-	if err != nil {
-		return err
-	}
-
-	stderrPipeR, stderrPipeW, err := os.Pipe()
-	if err != nil {
-		return err
-	}
-
-	finishStdout := make(chan struct{})
-	finishStderr := make(chan struct{})
-
-	go monitorPipe(cfg.Logger, stdoutPipeR, finishStdout)
-	go monitorPipe(cfg.Logger, stderrPipeR, finishStderr)
-	_, err = stdcopy.StdCopy(stdoutPipeW, stderrPipeW, attachResp.Reader)
-
-	stdoutPipeW.Close()
-	stderrPipeW.Close()
-
-	<-finishStdout
-	<-finishStderr
-
-	return err
 }

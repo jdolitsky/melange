@@ -53,7 +53,7 @@ directory is `/tmp/guest` with busybox as a dependency, and our workspace is `/t
 /tmp/ws/go.mod                <-- copied from source directory
 /tmp/ws/go.sum                <-- copied from source directory
 
-/tmp/guest                     <-- tmeporary guest directory created by melange
+/tmp/guest                     <-- temporary guest directory created by melange
 /tmp/guest/bin                 <-- files and dirs created by apk package dependencies
 /tmp/guest/bin/busybox         <-- files and dirs created by apk package dependencies
 /tmp/guest/home/build          <-- bind-mounted from workspace at /tmp/ws
