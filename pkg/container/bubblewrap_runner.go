@@ -72,8 +72,7 @@ func (bw *bubblewrap) OCIImageLoader() Loader {
 	return nil
 }
 
-// TempDir returns the base for temporary directory. For lima
-// this is /tmp/melange, as that is what is mounted r/w into the melnage-builder VM.
+// TempDir returns the base for temporary directory. For bubblewrap, this is empty.
 func (bw *bubblewrap) TempDir() string {
 	return ""
 }

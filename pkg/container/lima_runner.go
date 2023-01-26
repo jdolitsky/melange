@@ -42,8 +42,6 @@ const (
 	containerImageName = "index.docker.io/library/melange:latest"
 )
 
-// nolint: unused,deadcode,varcheck
-//
 //go:embed lima.yaml
 var config []byte
 
@@ -79,7 +77,7 @@ func (l *lima) OCIImageLoader() Loader {
 }
 
 // TempDir returns the base for temporary directory. For lima
-// this is /tmp/melange, as that is what is mounted r/w into the melnage-builder VM.
+// this is /tmp/melange, as that is what is mounted r/w into the melange-builder VM.
 func (l *lima) TempDir() string {
 	return melangeWritableParent
 }
@@ -306,7 +304,8 @@ func (l *lima) stop(name string) error {
 func (l *lima) start(name string) error {
 	// inspect existing runners
 	args := []string{"start", "--name", name, "--tty=false", "/dev/stdin"}
-	return l.limactl(nil, nil, nil, args...)
+	buf := bytes.NewReader(config)
+	return l.limactl(buf, nil, nil, args...)
 }
 
 // nolint: unused

@@ -14,11 +14,16 @@
 
 package sbom
 
-import "fmt"
+import (
+	"fmt"
+	"log"
+	"os"
+)
 
 func NewGenerator() (*Generator, error) {
 	return &Generator{
 		impl:    &defaultGeneratorImplementation{},
+		logger:  log.New(log.Writer(), "melange-sbom: ", log.LstdFlags|log.Lmsgprefix),
 		Options: defaultOptions,
 	}, nil
 }
@@ -41,16 +46,54 @@ type Spec struct {
 	Copyright      string
 	Namespace      string
 	Arch           string
+	logger         *log.Logger
+	GuestDir       string // Path to the apko build environment fs
+	WorkspaceDir   string
+	Subpackages    []string
 	Languages      []string
 }
 
 type Generator struct {
 	Options Options
+	logger  *log.Logger
 	impl    generatorImplementation
+}
+
+// GenerateBuildEnvSBOM creates the SBOM that describes the
+// guest environment where melange ran its build
+func (g *Generator) GenerateBuildEnvSBOM(spec *Spec) error {
+	pkgs, err := g.impl.ReadPackageIndex(spec)
+	if err != nil {
+		return fmt.Errorf("while reading apk index: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "There are %d packages in the build SBOM", len(pkgs))
+
+	pkg, err := g.impl.GenerateBuildPackage(spec, pkgs)
+	if err != nil {
+		return fmt.Errorf("generating build environment package: %w", err)
+	}
+
+	doc, err := g.impl.GenerateDocument(spec)
+	if err != nil {
+		return fmt.Errorf("generating bom document: %w", err)
+	}
+
+	doc.Packages = append(doc.Packages, pkg)
+
+	for _, name := range append([]string{spec.PackageName}, spec.Subpackages...) {
+		if err := g.impl.WriteSBOM(
+			spec, doc, name, fmt.Sprintf("%s-build-%s.spdx.json", spec.PackageName, spec.PackageVersion),
+		); err != nil {
+			return fmt.Errorf("writing sbom to disk: %w", err)
+		}
+	}
+	return nil
 }
 
 // GenerateSBOM runs the main SBOM generation process
 func (g *Generator) GenerateSBOM(spec *Spec) error {
+	spec.logger = g.logger
 	shouldRun, err := g.impl.CheckEnvironment(spec)
 	if err != nil {
 		return fmt.Errorf("checking SBOM environment: %w", err)
@@ -95,7 +138,10 @@ func (g *Generator) GenerateSBOM(spec *Spec) error {
 	}
 
 	// Finally, write the SBOM data to disk
-	if err := g.impl.WriteSBOM(spec, sbomDoc); err != nil {
+	if err := g.impl.WriteSBOM(
+		spec, sbomDoc, spec.PackageName,
+		fmt.Sprintf("%s-%s.spdx.json", spec.PackageName, spec.PackageVersion),
+	); err != nil {
 		return fmt.Errorf("writing sbom to disk: %w", err)
 	}
 
